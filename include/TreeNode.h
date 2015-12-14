@@ -333,7 +333,10 @@ public:
 
    /**
     * Performs one iteration of the MCTS algorithm, taking this to be the root
-    * node.
+    * node. (This function is embedded in all nodes in the tree, however, only
+    * the function of root node is called)(one iteration always starts from root
+    * noot and ends at leaf node)
+    
     * @param[in] mdp A number generator which returns a reward for a given
     * action.
     * @tparam[in] Generator Functor type which overloads the () operator by
@@ -358,8 +361,8 @@ public:
       // received for the root node. This has no real effect on the result,
       // but simplifies the backup algorithm applied later on.
       //***********************************************************************
-      std::stack<double> rewards;
-      rewards.push(0.0);
+      //std::stack<double> rewards; // here we don't use immediate rewards
+      //rewards.push(0.0);
 
       //***********************************************************************
       // Transverse the highest value path from the current node, until
@@ -373,8 +376,8 @@ public:
          action = pCur->selectAction();
          pCur = pCur->vpChildren_i[action];
          visited.push(pCur);
-         curReward = mdp(action);
-         rewards.push(curReward);
+         //curReward = mdp(action);
+         //rewards.push(curReward);
       }
 
       //***********************************************************************
@@ -384,13 +387,14 @@ public:
       action = pCur->selectAction();
       pCur = pCur->vpChildren_i[action];
       visited.push(pCur);
-      curReward = mdp(action);
-      rewards.push(curReward);
+      //curReward = mdp(action);
+      //rewards.push(curReward);
 
       //***********************************************************************
-      // Estimate the value of the new leaf node using the rollout policy
+      // Estimate the value of the new leaf node (expanded children) using the
+      // rollout policy
       //***********************************************************************
-      double value = rollOut(mdp);
+      double value = rollOut(mdp);//??
 
       //***********************************************************************
       // Update the statistics for each node along the path using the
@@ -398,12 +402,12 @@ public:
       //***********************************************************************
       while(!visited.empty())
       {
-         assert(visited.size()==rewards.size()); // should always be true
-         value = rewards.top() + gamma_i*value;  // update the total value
+         //assert(visited.size()==rewards.size()); // should always be true
+         value = gamma_i*value; //value = rewards.top() + gamma_i*value;  // update the total value
          pCur = visited.top();       // get the current node in the path
          pCur->updateStats(value);   // update statistics
          visited.pop();              // remove the current node from the stack
-         rewards.pop();
+         //rewards.pop();
       }
 
    } // iterate
