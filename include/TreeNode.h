@@ -29,7 +29,7 @@ const double MAX_ROLLOUT_ITERATIONS = 50;
 /**
  * Default discount factor for future rewards.
  */
-const double DEFAULT_GAMMA = 0.9;
+const double DEFAULT_GAMMA = 1.0;
 
 /**
  * Simple uniform random number generator.
@@ -95,7 +95,7 @@ private:
     * @pre This must not be a leaf node.
     * @returns the index of the selected child's action
     */
-   int selectAction() 
+   int selectBranch()
    {
       //***********************************************************************
       // Ensure preconditions are meet: can't select a child, if this is a
@@ -150,7 +150,7 @@ private:
       //***********************************************************************
       return selected;
 
-   } // selectAction
+   } // selectBranch
 
    /**
     * If this is a leaf node, expands the tree by initalising this node's
@@ -373,7 +373,7 @@ public:
       double curReward = 0.0; // immediate reward for last action
       while (!pCur->isLeaf())
       {
-         action = pCur->selectAction();
+         action = pCur->selectBranch();
          pCur = pCur->vpChildren_i[action];
          visited.push(pCur);
          //curReward = mdp(action);
@@ -384,7 +384,7 @@ public:
       // Expand the current (leaf) node by depth 1, and select its best child.
       //***********************************************************************
       pCur->expand();
-      action = pCur->selectAction();
+      action = pCur->selectBranch();
       pCur = pCur->vpChildren_i[action];
       visited.push(pCur);
       //curReward = mdp(action);
@@ -394,7 +394,7 @@ public:
       // Estimate the value of the new leaf node (expanded children) using the
       // rollout policy
       //***********************************************************************
-      double value = rollOut(mdp);//??
+      double value = rollOut(mdp);
 
       //***********************************************************************
       // Update the statistics for each node along the path using the
