@@ -10,6 +10,7 @@
 #include <limits>
 #include <stack>
 #include <iostream>
+#include <eigen3/Eigen/Dense>
 
 /**
  * Namespace for all public functions and types defined in the MCTS library.
@@ -89,6 +90,16 @@ private:
     * Uniform random number generated used for selection and rollout.
     */
    URand rand_i;
+    
+   /**
+    * The centre point of the space that the node represents
+    */
+    Eigen::Vector3d centre;
+    
+    /*
+     * the space size that the node represents (the range of one dimension)
+     */
+    double range;
 
    /**
     * Selects the next action to explore using UCB.
