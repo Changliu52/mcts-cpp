@@ -198,7 +198,7 @@ private:
       // Select a random position within the space that the node represents.
        Eigen::Vector3d action;
        for(int i=0; i<3; i++){
-           action(i) = 2.0 * rand_i() * range_i(i) + centre_i(i) + range_i(i);
+           action(i) = 2.0 * rand_i() * range_i(i) - range_i(i) + centre_i(i);
        }
       
       // Generate reward
