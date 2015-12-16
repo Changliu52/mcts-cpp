@@ -23,16 +23,6 @@ namespace mcts {
 const double EPSILON = 1e-6;
 
 /**
- * Maximum number of iterations for rollout policy.
- */
-const double MAX_ROLLOUT_ITERATIONS = 50;
-
-/**
- * Default discount factor for future rewards.
- */
-const double DEFAULT_GAMMA = 1.0;
-
-/**
  * Simple uniform random number generator.
  * This provides a default type for generating random numbers for
  * performing Monte Carlo Tree Search.
@@ -48,21 +38,22 @@ struct SimpleURand
    }
 };
 
-/**
+    
+/** UCTreeNode CLASS
+ *________________________________________________________________________________
  * Represents a node in a UCT tree. This provides the main data structure and
  * implementation of the UCT (Upper Confidence Tree) algorithm.
- * @tparam N_ACTIONS the number of actions in the action domain.
  * @tparam URand class used to generate uniform random numbers in range [0,1).
  * This is used internally during selection and rollout.
  */
-template<int N_ACTIONS, class URand=SimpleURand> class UCTreeNode
+template<class URand=SimpleURand> class UCTreeNode
 {
 private: 
 
    /**
     * Array of pointers (one per action) to all children of this node.
     */
-   UCTreeNode* vpChildren_i[N_ACTIONS];
+   UCTreeNode* vpChildren_i[2];
 
    /**
     * True iff this is a leaf node with no children. If this variable is true
@@ -82,11 +73,6 @@ private:
    double totValue_i;
 
    /**
-    * Discount factor for future rewards.
-    */
-   double gamma_i;
-
-   /**
     * Uniform random number generated used for selection and rollout.
     */
    URand rand_i;
@@ -94,12 +80,12 @@ private:
    /**
     * The centre point of the space that the node represents
     */
-    Eigen::Vector3d centre;
+   Eigen::Vector3d centre_i;
     
-    /*
-     * the space size that the node represents (the range of one dimension)
-     */
-    double range;
+   /*
+    * difference between centre and maximum in each axis
+    */
+   Eigen::Vector3d range_i;
 
    /**
     * Selects the next action to explore using UCB.
@@ -124,7 +110,7 @@ private:
       //***********************************************************************
       // For each child node
       //***********************************************************************
-      for(int k=0; k<N_ACTIONS; ++k)
+      for(int k=0; k<2; ++k)
       {
          //********************************************************************
          // Sanity check that the current child is not null (this should
@@ -163,6 +149,7 @@ private:
 
    } // selectBranch
 
+    
    /**
     * If this is a leaf node, expands the tree by initalising this node's
     * children. If this is not a leaf node, no action is taken.
@@ -171,26 +158,33 @@ private:
     */
    void expand()
    {
-      //***********************************************************************
-      // If this is not a leaf node, then we're done. There is nothing to do.
-      //***********************************************************************
-      if(!isLeaf_i)
-      {
-         return; 
-      }
+       // If this is not a leaf node, then we're done. There is nothing to do.
+       if(!isLeaf_i)
+       {
+           return;
+       }
 
-      //***********************************************************************
-      // Otherwise, we set the leaf flag to false (to indicate that this is
-      // no longer a leaf node) and construct a new child for each action.
-      //***********************************************************************
-      isLeaf_i = false;
-      for (int k=0; k<N_ACTIONS; ++k)
-      {
-         vpChildren_i[k] = new UCTreeNode();
-      }
-
+       // Otherwise, we set the leaf flag to false (to indicate that this is
+       // no longer a leaf node)
+       isLeaf_i = false;
+       
+       // construct a new child for each action.
+       axis = rand() % 3; // generate an int from 0 to 2 to randomly select a axis to expand
+       
+       // init the in_range and in_centre buffer
+       Eigen::Vector3d range  = range_i(axis)/2.0; // buffer for in_range for children (half of the range of the parent)
+       Eigen::Vector3d centre = centre_i;          // buffer for in_centre for children
+       
+       // first child
+       centre(axis) = centre_i(axis) + range(axis);
+       vpChildren_i[0] = new UCTreeNode(centre, range);
+       
+       // second child
+       centre(axis) = centre_i(axis) - range(axis);
+       vpChildren_i[1] = new UCTreeNode(centre, range);
    } // expand 
 
+    
    /**
     * Returns an estimated value for a leaf node using the rollout policy.
     * @param[in] mdp A number generator which returns a reward for a given
@@ -201,31 +195,19 @@ private:
     */
    template<class Generator> double rollOut(Generator mdp)
    {
-      //***********************************************************************
-      // Perform random actions until we reach the maximum number of
-      // iterations.
-      //***********************************************************************
-      double discount = 1.0;
+      // Select a random position within the space that the node represents.
+       Eigen::Vector3d action;
+       for(int i=0; i<3; i++){
+           action(i) = 2.0 * rand_i() * range_i(i) + centre_i(i) + range_i(i);
+       }
+      
+      // Generate reward
       double totReward = 0.0;
-      for(int k=0; k<MAX_ROLLOUT_ITERATIONS; ++k)
-      {
-         //********************************************************************
-         // Perform random action an update reward
-         //********************************************************************
-         int action = rand_i()*N_ACTIONS;
-         totReward += discount*mdp(action);
-
-         //********************************************************************
-         // Update discount for the next timestep
-         //********************************************************************
-         discount *= gamma_i;
-
-      } // for loop
-
+      totReward = mdp(action);
       return totReward;
-
    } // rollout
 
+    
    /**
     * Updates the statistics for this node for a given observed value.
     * @param[in] value the observed value.
@@ -236,6 +218,9 @@ private:
       totValue_i += value; // update the total value for all visits
    }
 
+    
+    
+    
 public:
 
    /**
@@ -244,48 +229,20 @@ public:
     * @param[in] inRand a uniform random number generated used for selection and
     * rollout.
     */
-   UCTreeNode(double inGamma=DEFAULT_GAMMA,URand inRand=URand())
-      : isLeaf_i(true), nVisits_i(0), totValue_i(0), gamma_i(inGamma),
+    UCTreeNode(Eigen::Vector3d in_centre, Eigen::Vector3d in_range, URand inRand=URand())
+      : isLeaf_i(true), nVisits_i(0), totValue_i(0), centre_i(in_centre), range_i(in_range)
         rand_i(inRand)
    {
       //***********************************************************************
       // Since this is a leaf node with no children, all child pointers
       // should be null
       //***********************************************************************
-      for(int k=0; k<N_ACTIONS; ++k)
+      for(int k=0; k<2; ++k)
       {
          vpChildren_i[k] = 0;
       }
 
    }  // default constructor
-
-   /**
-    * Copy constructor. Performs a deep copy, including all children.
-    * @param[in] tree the tree to copy.
-    */
-   UCTreeNode(const UCTreeNode& tree)
-      : isLeaf_i(tree.isLeaf_i), nVisits_i(tree.nVisits_i),
-        totValue_i(tree.totValue_i), gamma_i(tree.gamma_i),
-        rand_i(tree.rand_i)
-   {
-      //***********************************************************************
-      // If we've just copied a leaf node, then we're done
-      //***********************************************************************
-      if(isLeaf_i)
-      {
-         return;
-      }
-
-      //***********************************************************************
-      // Otherwise, we need to copy children as well.
-      //***********************************************************************
-      for(int k=0; k<N_ACTIONS; ++k)
-      {
-         assert(0!=tree.vpChildren_i[k]);
-         vpChildren_i[k] = new UCTreeNode(*tree.vpChildren_i[k]);
-      }
-
-   } // copy constructor
 
    /**
     * Copy assignment. Performs a deep copy, including all children.
@@ -298,7 +255,7 @@ public:
       //***********************************************************************
       if(!isLeaf_i)
       {
-         for(int k=0; k<N_ACTIONS; ++k)
+         for(int k=0; k<2; ++k)
          {
             assert(0!=vpChildren_i[k]);
             delete vpChildren_i[k];
@@ -314,7 +271,6 @@ public:
       isLeaf_i = tree.isLeaf_i;
       nVisits_i = tree.nVisits_i;
       totValue_i = tree.totValue_i;
-      gamma_i = tree.gamma_i;
       rand_i = tree.rand_i;
 
       //***********************************************************************
@@ -322,7 +278,7 @@ public:
       //***********************************************************************
       if(!isLeaf_i)
       {
-         for(int k=0; k<N_ACTIONS; ++k)
+         for(int k=0; k<2; ++k)
          {
             assert(0!=tree.vpChildren_i[k]);
             assert(0==vpChildren_i[k]);
@@ -335,7 +291,7 @@ public:
    } // operator=
 
    /**
-    * Returns true iff this is a leaf node with no children.
+    * Returns true if this is a leaf node with no children.
     */
    bool isLeaf() const
    {
@@ -367,15 +323,6 @@ public:
       visited.push(this);
 
       //***********************************************************************
-      // Create stack to hold immediate rewards generated as we transverse
-      // the tree. Initially, this zero as a place holder for the reward
-      // received for the root node. This has no real effect on the result,
-      // but simplifies the backup algorithm applied later on.
-      //***********************************************************************
-      //std::stack<double> rewards; // here we don't use immediate rewards
-      //rewards.push(0.0);
-
-      //***********************************************************************
       // Transverse the highest value path from the current node, until
       // we hit a leaf node. We also record rewards for each action as we go
       // along.
@@ -387,8 +334,6 @@ public:
          action = pCur->selectBranch();
          pCur = pCur->vpChildren_i[action];
          visited.push(pCur);
-         //curReward = mdp(action);
-         //rewards.push(curReward);
       }
 
       //***********************************************************************
@@ -398,8 +343,6 @@ public:
       action = pCur->selectBranch();
       pCur = pCur->vpChildren_i[action];
       visited.push(pCur);
-      //curReward = mdp(action);
-      //rewards.push(curReward);
 
       //***********************************************************************
       // Estimate the value of the new leaf node (expanded children) using the
@@ -413,12 +356,9 @@ public:
       //***********************************************************************
       while(!visited.empty())
       {
-         //assert(visited.size()==rewards.size()); // should always be true
-         value = gamma_i*value; //value = rewards.top() + gamma_i*value;  // update the total value
          pCur = visited.top();       // get the current node in the path
          pCur->updateStats(value);   // update statistics
          visited.pop();              // remove the current node from the stack
-         //rewards.pop();
       }
 
    } // iterate
@@ -435,7 +375,7 @@ public:
       //***********************************************************************
       if(isLeaf_i)
       {
-         return rand_i()*N_ACTIONS;
+         return rand_i()*2;
       }
 
       //***********************************************************************
@@ -448,7 +388,7 @@ public:
       //***********************************************************************
       // For each child node
       //***********************************************************************
-      for(int k=0; k<N_ACTIONS; ++k)
+      for(int k=0; k<2; ++k)
       {
          //********************************************************************
          // Sanity check that the current child is not null (this should
@@ -497,12 +437,12 @@ public:
    /**
     * Returns the Q-value for a given action.
     * @param[in] action the index of the action whose value should be returned.
-    * @pre \c action must be between 0 and \c N_ACTIONS (the number of actions).
+    * @pre \c action must be between 0 and \c N_Branch (the number of actions).
     */
    double qValue(int action) const
    {
       assert(0<=action);
-      assert(N_ACTIONS>action);
+      assert(2>action);
       return vpChildren_i[action]->vValue();
    }
 
@@ -523,7 +463,7 @@ public:
       // Otherwise, we have to count the number of nodes in each subtree
       //***********************************************************************
       int result = 1;
-      for(int k=0; k<N_ACTIONS; ++k)
+      for(int k=0; k<2; ++k)
       {
          result += vpChildren_i[k]->numOfNodes();
       }
@@ -554,7 +494,7 @@ public:
       // Otherwise, we return the maximum subtree depth plus 1.
       //***********************************************************************
       int maxDepth = 0;
-      for(int k=0; k<N_ACTIONS; ++k)
+      for(int k=0; k<2; ++k)
       {
          int curDepth = vpChildren_i[k]->maxDepth(parentDepth+1);
          if(maxDepth < curDepth)
@@ -578,7 +518,7 @@ public:
          return;
       }
 
-      for(int k=0; k<N_ACTIONS; ++k)
+      for(int k=0; k<2; ++k)
       {
          if(0!=vpChildren_i[k])
          {
@@ -595,10 +535,10 @@ public:
  * Produces a string representation of a treeNode for diagnostic purposes.
  * Basically, just prints the vValue and the qValue for each action.
  */
-template<int N_ACTIONS> std::ostream& operator<<
+std::ostream& operator<<
 (
  std::ostream& out,
- const UCTreeNode<N_ACTIONS>& tree
+ const UCTreeNode& tree
 )
 {
 
@@ -619,7 +559,7 @@ template<int N_ACTIONS> std::ostream& operator<<
    //**************************************************************************
    // Otherwise, also print the q values for each action.
    //**************************************************************************
-   for(int k=0; k<N_ACTIONS; ++k)
+   for(int k=0; k<2; ++k)
    {
       out << ",Q" << k << '=' << tree.qValue(k);
    }
