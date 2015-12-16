@@ -50,8 +50,7 @@ int main()
       //************************************************************************
       // Try instantiate a tree node
       //************************************************************************
-      const int N_ACTIONS = 4;
-      mcts::UCTreeNode<N_ACTIONS> tree;
+      mcts::UCTreeNode tree;
 
       //************************************************************************
       // Try expanding the tree a few times
